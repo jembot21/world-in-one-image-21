@@ -38,23 +38,14 @@ def render(root):
         coords = tuple(round(v*S) for v in box)
         pen.rounded_rectangle(coords, radius=round(radius*S), fill=fill, outline=outline, width=S)
 
-    def line(text, x, y, w, size, kind='regular', color=WHITE, minimum=6, squeeze=False):
+    def line(text, x, y, w, size, kind='regular', color=WHITE, minimum=6):
         original = size
         while width(text, font(kind, size)) > w and size > minimum:
             size = max(minimum, size-0.25)
         face = font(kind, size)
         measured = width(text, face)
-        if measured > w:
-            assert squeeze, (text, measured, w)
-            bbox = face.getbbox(text)
-            layer = Image.new('RGBA', (int(measured*S)+4, bbox[3]-bbox[1]+4), (0, 0, 0, 0))
-            ImageDraw.Draw(layer).text((0, 0), text, font=face, fill=color, anchor='lt')
-            layer = layer.resize((round(w*S), layer.height), Image.Resampling.LANCZOS)
-            image.paste(layer, (round(x*S), round(y*S)), layer)
-            adjustments.append(('condensed', text, round(w/measured, 3)))
-        else:
-            assert measured <= w + 0.01
-            pen.text((round(x*S), round(y*S)), text, font=face, fill=color, anchor='lt')
+        assert measured <= w + 0.01, (text, measured, w)
+        pen.text((round(x*S), round(y*S)), text, font=face, fill=color, anchor='lt')
         if size != original:
             adjustments.append(('font', text, size))
         return size
@@ -134,7 +125,17 @@ def render(root):
     for i, brief in enumerate(data['briefs']):
         x = 26+(i // 19)*491
         y = 696+(i % 19)*13
-        line(brief, x, y, 481, 14.5, minimum=13.5, squeeze=True)
+        # Preserve glyph proportions: reclaim the right inset at 12.5px,
+        # then reduce type further only if the full column is still too narrow.
+        column_width = 481
+        available = column_width-10
+        size = 14.5
+        while size > 12.5 and width(brief, font('regular', size)) > available:
+            size -= 0.25
+        if width(brief, font('regular', size)) > available:
+            available = column_width
+        fitted = line(brief, x, y, available, size, minimum=6)
+        adjustments.append(('brief', brief, fitted, available))
     rect((26, 947, 998, 980), '#101F31', outline='#506880', radius=4)
     paragraph(data['date_check'], (35, 953, 954, 25), 11, color=PALE, maxlines=2)
     paragraph(data['footer'], (26, 988, 972, 23), 9.5, color=MUTED, maxlines=2)

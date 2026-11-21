@@ -2,6 +2,7 @@
 from functools import lru_cache
 from io import BytesIO
 import json
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 S = 3
@@ -14,7 +15,8 @@ CYAN = '#6ED6E3'
 PALETTE = ('#79A9D7', '#60C6BA', '#E7B967', '#E68493', '#B69ADF', '#86C69D')
 
 
-def render(root):
+def render():
+    root = Path(__file__).resolve().parent
     data = json.loads((root / 'stories.json').read_text(encoding='utf-8'))
     assert len(data['leads']) == 12 and len(data['briefs']) == 38
     image = Image.new('RGB', (1024*S, 1024*S), BG)
@@ -26,10 +28,16 @@ def render(root):
     def font(kind, size):
         files = {'regular': 'Barlow-Regular.ttf', 'bold': 'Barlow-Bold.ttf',
                  'semi': 'Barlow-SemiBold.ttf', 'display': 'ArchivoBlack-Regular.ttf'}
-        path = root / 'assets' / files[kind]
-        if not path.is_file() or path.stat().st_size < 10000:
-            path = '/usr/share/fonts/truetype/dejavu/DejaVuSans' + ('' if kind == 'regular' else '-Bold') + '.ttf'
-        return ImageFont.truetype(str(path), round(size*S))
+        dejavu = 'DejaVuSans' + ('' if kind == 'regular' else '-Bold') + '.ttf'
+        candidates = (root / 'assets' / files[kind],
+                      root / 'assets' / dejavu,
+                      Path('/usr/share/fonts/truetype/dejavu') / dejavu)
+        for path in candidates:
+            try:
+                return ImageFont.truetype(str(path), round(size*S))
+            except OSError:
+                continue
+        return ImageFont.load_default(size=round(size*S))
 
     def width(text, face):
         return pen.textlength(text, font=face) / S
